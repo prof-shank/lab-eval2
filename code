@@ -1,0 +1,55 @@
+import requests
+import pandas as pd
+from bs4 import BeautifulSoup
+from pymongo import MongoClient
+
+url = "https://www.ttfi.org/events/ranking/MjAyNA==/NDk"
+response = requests.get(url)
+soup = BeautifulSoup(response.content, 'html.parser')
+
+table = soup.find('table')
+data = []
+header = [th.get_text(strip=True) for th in table.find_all('th')]
+rows = table.find_all('tr')
+
+for row in rows[1:]:  
+    cols = row.find_all('td')
+    if len(cols) >= 5: 
+        player_data = {
+            'TTFI ID': cols[0].get_text(strip=True),
+            'Name': cols[1].get_text(strip=True),
+            'State': cols[2].get_text(strip=True),
+            'DOB': cols[3].get_text(strip=True),
+            'National Ranking': text(cols[4].get_text(strip=True)),
+        }
+        data.append(player_data)
+print(data)
+df = pd.DataFrame(data)
+rank_count = df[(df['National Ranking'] >= 19) & (df['National Ranking'] <= 25)].shape[0]
+print(f'Number of players ranked 19-25: {rank_count}')
+
+df['DOB'] = pd.to_datetime(df['DOB'], errors='coerce')  
+y_players = df[df['DOB'].dt.year > 2010]['Name'].tolist()
+print(f'Players born after 2010: {y_players}')
+
+client = MongoClient('mongodb://localhost:27017/')
+db = client['ttfi_db']  
+collection = db['players']  
+
+if data:
+    collection.insert_many(data)
+    print(f'Inserted {len(data)} into MongoDB.')
+    
+
+    
+up_players = collection.find({'State': 'UP'})
+print("Players from UP:")
+for player in up_players:
+    print(player)
+    
+position = 10  
+ranked_player = collection.find_one({'National Ranking': position})
+if ranked_player:
+    print(f'Player with rank {position}: {ranked_player}')
+else:
+    print(f'No player found with rank {position}.')
